@@ -9,7 +9,7 @@ metadata:
     networking.gke.io/managed-certificates: unco
 spec:
   rules:
-  - host: aslamgcp.my.id
+  - host: staging-luna-api-admin.azurewebsites.net
     http:
       paths:
       - path: /*

@@ -1,0 +1,56 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: dev - Web Static Microservice
+
+env:
+  PROJECT_NAME: webstatic-microservice
+  IMAGE_NAME: 336620154014.dkr.ecr.southeast-asia.portalazure.com/webstatic-microservice:dev-${{ github.run_number }}
+  DEPLOYMENT_DIR: devops-cloud-cluster/azure/eks/05.services/dev/webstatic-microservice
+
+on:
+  push:
+    branches: [ "development" ]
+  pull_request:
+    branches: [ "development" ]
+
+jobs:
+  build:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    steps:
+      - uses: actions
+
+
+  deploy:
+    needs: build
+    name: Update Script and Deploy
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    container: bitnami/kubectl:1.22.11-debian-11-r3
+
+    steps:
+      - uses: benjlevesque/short-sha@v1.2
+        id: short-shag
+        with:
+          length: 6
+      - name: Update Deployment Script
+        env:
+          DEPLOYMENT_REPO: https://${{ secrets.GITLAB_USER_NAME }}:${{ secrets.CI_ACCESS_TOKEN }}@gitlab.com/impacto-group/devops-cloud-cluster.git
+          SHORT_SHA: ${{ steps.short-sha.outputs.sha }}
+
+        run: |
+          echo "Deployment Dir : $DEPLOYMENT_DIR"
+          pwd
+          
+          git clone $DEPLOYMENT_REPO
+          cd $DEPLOYMENT_DIR
+          kubectl patch --local -f deployment.yaml -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-microservice","image":"'${IMAGE_NAME}'"}]}}}}' -o yaml | tee deployment-temp.yaml
+          rm -rf deployment.yaml && mv deployment-temp.yaml deployment.yaml
+          
+          git config user.email "${{ secrets.GITLAB_USER_EMAIL }}"
+          git config user.name "${{ secrets.GITLAB_USER_NAME }}"
+          git add --all
+          git commit -m "[skip ci] Auto-commit by CI/CD pipeline [${{ github.repository }}] [${{ github.ref_name }}] [$SHORT_SHA] [${{ github.actor }}]" || echo "No changes, nothing to commit!"
+          git push
